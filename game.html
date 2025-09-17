@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural Music Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        canvas {
+            border: 2px solid #fff;
+        }
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 18px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <div id="instructions">Click notes to play music!<br>Match colors for combos.</div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        
+        // Audio Context for music generation
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Game state
+        let notes = [];
+        let score = 0;
+        let combo = 0;
+        let lastNoteColor = null;
+        
+        // Note colors and corresponding frequencies
+        const colors = ['#ff5555', '#55ff55', '#5555ff', '#ffff55'];
+        const frequencies = [261.63, 329.63, 392.00, 440.00]; // C4, E4, G4, A4
+        
+        class Note {
+            constructor(x, y, colorIndex) {
+                this.x = x;
+                this.y = y;
+                this.radius = 20;
+                this.color = colors[colorIndex];
+                this.frequency = frequencies[colorIndex];
+                this.speed = 2 + Math.random() * 2;
+            }
+            
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+            }
+            
+            update() {
+                this.y += this.speed;
+                if (this.y > canvas.height + this.radius) {
+                    return true; // Note is off-screen
+                }
+                return false;
+            }
+            
+            playSound() {
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(this.frequency, audioCtx.currentTime);
+                
+                gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.currentTime ? audioCtx.destination : audioCtx.destination);
+                
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.5);
+            }
+        }
+        
+        function spawnNote() {
+            const x = Math.random() * (canvas.width - 40) + 20;
+            const colorIndex = Math.floor(Math.random() * colors.length);
+            notes.push(new Note(x, -20, colorIndex));
+        }
+        
+        function handleClick(x, y) {
+            for (let i = notes.length - 1; i >= 0; i--) {
+                const note = notes[i];
+                const dist = Math.sqrt((x - note.x) ** 2 + (y - note.y) ** 2);
+                if (dist < note.radius) {
+                    note.playSound();
+                    if (lastNoteColor === note.color) {
+                        combo++;
+                        score += 10 * combo;
+                    } else {
+                        combo = 1;
+                        score += 10;
+                    }
+                    lastNoteColor = note.color;
+                    notes.splice(i, 1);
+                    scoreDisplay.textContent = `Score: ${score}`;
+                    break;
+                }
+            }
+        }
+        
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            handleClick(x, y);
+        });
+        
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Spawn notes periodically
+            if (Math.random() < 0.03) {
+                spawnNote();
+            }
+            
+            // Update and draw notes
+            notes = notes.filter(note => !note.update());
+            notes.forEach(note => note.draw());
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start the game
+        gameLoop();
+    </script>
+</body>
+</html>
